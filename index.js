@@ -115,6 +115,12 @@ setPersistence({
             Y.applyUpdate(ydoc, new Uint8Array(data));
             console.log(`Loaded ${docName} from MinIO`);
         }
+
+        // For file index, validate that all entries exist in MinIO
+        if (docName === '__file_index__') {
+            await validateFileIndex(ydoc);
+        }
+
         // Save on updates
         ydoc.on('update', () => {
             debouncedSave(docName, ydoc);
@@ -124,6 +130,44 @@ setPersistence({
         await saveToMinIO(docName, ydoc);
     }
 });
+
+// Validate file index against MinIO - remove entries for non-existent files
+async function validateFileIndex(ydoc) {
+    const fileIndex = ydoc.getMap('files');
+    const allKeys = Array.from(fileIndex.keys());
+
+    console.log('[FILE INDEX VALIDATION] Checking', allKeys.length, 'entries against MinIO...');
+
+    const keysToDelete = [];
+
+    for (const key of allKeys) {
+        // Skip folders, only check files
+        const metadata = fileIndex.get(key);
+        if (metadata?.type === 'folder') continue;
+
+        // Check if the Yjs file exists in MinIO
+        const minioKey = `yjs/${key.replace(/[^a-zA-Z0-9._-]/g, '_')}.yjs`;
+        try {
+            await minioClient.statObject(BUCKET_NAME, minioKey);
+            // File exists, keep the entry
+        } catch (err) {
+            if (err.code === 'NotFound') {
+                console.log(`[FILE INDEX VALIDATION] Removing orphan: ${key} (not in MinIO)`);
+                keysToDelete.push(key);
+            }
+        }
+    }
+
+    // Delete orphaned entries
+    if (keysToDelete.length > 0) {
+        ydoc.transact(() => {
+            for (const key of keysToDelete) {
+                fileIndex.delete(key);
+            }
+        });
+        console.log(`[FILE INDEX VALIDATION] Removed ${keysToDelete.length} orphaned entries`);
+    }
+}
 
 // --- HTTP + WebSocket Server ---
 const server = http.createServer((req, res) => {
