@@ -21,6 +21,17 @@ const minioClient = new Minio.Client({
 
 const BUCKET_NAME = process.env.MINIO_BUCKET || 'obsidian-sync';
 
+// Convert room name back to file path (reverse of pathToRoom)
+function roomToPath(room) {
+    // Reverse URL-safe base64
+    let base64 = room.replace(/-/g, '+').replace(/_/g, '/');
+    // Add padding if needed
+    while (base64.length % 4 !== 0) {
+        base64 += '=';
+    }
+    return decodeURIComponent(Buffer.from(base64, 'base64').toString('utf-8'));
+}
+
 // Ensure bucket exists
 async function ensureBucket() {
     try {
@@ -170,7 +181,63 @@ async function validateFileIndex(ydoc) {
 }
 
 // --- HTTP + WebSocket Server ---
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+    // CORS headers for cross-origin requests
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+
+    const url = new URL(req.url, `http://${req.headers.host}`);
+
+    // GET /files - List all synced files from MinIO
+    if (url.pathname === '/files' && req.method === 'GET') {
+        try {
+            const files = [];
+            const objectStream = minioClient.listObjects(BUCKET_NAME, 'yjs/', true);
+
+            for await (const obj of objectStream) {
+                // Extract room name from MinIO key: yjs/roomname.yjs -> roomname
+                const key = obj.name;
+                if (key.startsWith('yjs/') && key.endsWith('.yjs')) {
+                    const roomName = key.slice(4, -4); // Remove 'yjs/' prefix and '.yjs' suffix
+
+                    // Skip special rooms
+                    if (roomName === '__file_index__') continue;
+
+                    // Decode room name back to file path (reverse of pathToRoom)
+                    try {
+                        const filePath = roomToPath(roomName);
+                        files.push(filePath);
+                    } catch (err) {
+                        // If decoding fails, it might be old format - try legacy conversion
+                        console.log(`[/files] Failed to decode room: ${roomName}, using legacy`);
+                        // Fallback for old format (if any) - this part might need adjustment
+                        // based on how old room names were generated.
+                        // For now, we'll just log and skip if it's not base64url.
+                        // If old format was just replacing '/' with '_', you could add:
+                        // files.push(roomName.replace(/_/g, '/'));
+                    }
+                }
+            }
+
+            console.log(`[/files] Returning ${files.length} files`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ files }));
+        } catch (err) {
+            console.error('[/files] Error:', err.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+    }
+
+    // Default response
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Yjs sync server running');
 });
