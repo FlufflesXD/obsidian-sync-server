@@ -45,9 +45,8 @@ async function ensureBucket() {
     } catch (err) {
         console.error('Error ensuring bucket:', err);
     }
-    console.error(`TEST PRINT NIGGER`);
-    console.error(`TEST PRINT NIGGER`);
-    console.error(`TEST PRINT NIGGER`);
+    console.log(`NIGGERSSS`);
+    console.log(`NIGGERSSS`);
 }
 
 // Load Yjs doc from MinIO
@@ -209,11 +208,6 @@ const server = http.createServer(async (req, res) => {
                     } catch (err) {
                         // If decoding fails, it might be old format - try legacy conversion
                         console.log(`[/files] Failed to decode room: ${roomName}, using legacy`);
-                        // Fallback for old format (if any) - this part might need adjustment
-                        // based on how old room names were generated.
-                        // For now, we'll just log and skip if it's not base64url.
-                        // If old format was just replacing '/' with '_', you could add:
-                        // files.push(roomName.replace(/_/g, '/'));
                     }
                 }
             }
@@ -227,6 +221,20 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({ error: err.message }));
         }
         return;
+    }
+
+    // GET /health - Health check endpoint
+    if (url.pathname === '/health' && req.method === 'GET') {
+        try {
+            // Test MinIO connection
+            await minioClient.bucketExists(BUCKET_NAME);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: 'healthy', minio: 'connected' }));
+        } catch (err) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: 'unhealthy', minio: 'disconnected', error: err.message }));
+            return;
+        }
     }
 
     // Default response
