@@ -45,6 +45,9 @@ async function ensureBucket() {
     } catch (err) {
         console.error('Error ensuring bucket:', err);
     }
+    console.error(`TEST PRINT NIGGER`);
+    console.error(`TEST PRINT NIGGER`);
+    console.error(`TEST PRINT NIGGER`);
 }
 
 // Load Yjs doc from MinIO
