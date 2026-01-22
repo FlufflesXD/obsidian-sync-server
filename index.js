@@ -45,8 +45,6 @@ async function ensureBucket() {
     } catch (err) {
         console.error('Error ensuring bucket:', err);
     }
-    console.log(`NIGGERSSS`);
-    console.log(`NIGGERSSS`);
 }
 
 // Load Yjs doc from MinIO
@@ -258,6 +256,8 @@ server.on('upgrade', (request, socket, head) => {
 // Start server
 ensureBucket().then(() => {
     server.listen(PORT, '0.0.0.0', () => {
-        console.log(`Yjs WebSocket server running on port ${PORT}`);
+    console.log(`Yjs WebSocket server running on port ${PORT}`);
+    console.log(`NIGGERSSS`);
+    console.log(`NIGGERSSS`);
     });
 });
