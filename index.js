@@ -78,20 +78,9 @@ async function saveToMinIO(docName, ydoc) {
         const state = Y.encodeStateAsUpdate(ydoc);
         const buffer = Buffer.from(state);
 
-        // Check if doc is essentially empty (deleted)
-        const text = ydoc.getText('content').toString();
-        if (text.length === 0 && docName !== '__file_index__') {
-            // Doc is empty, delete from MinIO instead of saving
-            try {
-                await minioClient.removeObject(BUCKET_NAME, `yjs/${docName}.yjs`);
-                console.log(`Deleted ${docName} from MinIO (empty doc)`);
-            } catch (err) {
-                if (err.code !== 'NoSuchKey') {
-                    console.error(`Error deleting ${docName}:`, err.message);
-                }
-            }
-            return;
-        }
+        // Note: We no longer delete "empty" docs automatically.
+        // Empty files are valid - the deletion logic was causing race conditions
+        // where new files got deleted before content could sync.
 
         await minioClient.putObject(BUCKET_NAME, `yjs/${docName}.yjs`, buffer, buffer.length);
         console.log(`Saved ${docName} to MinIO`);
